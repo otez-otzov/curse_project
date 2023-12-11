@@ -1,0 +1,118 @@
+import io
+import pandas as pd
+import matplotlib.pyplot as plt
+
+df = pd.read_excel(io.BytesIO(uploaded['inf (1).xlsx']))
+dd = pd.read_excel(io.BytesIO(uploaded['valid (1).xlsx']))
+
+df_origin=df.copy()
+
+print("Начальный набор данных:")
+print(df)
+
+df = df.apply(lambda x: x.str.upper() if x.dtype == "object" else x)
+
+row_start=len(df.index)
+print('Количество записей в наборе до начала обработки:',row_start)
+
+miss_counts = df.isnull().sum()
+print('Количество пустых ячеек до начала обработки:',miss_counts)
+
+plt.figure()
+plt.title('Исходное количество записей')
+df.count().plot(kind='bar', linestyle='solid', color='blue')
+plt.xlabel('Столбцы')
+plt.ylabel('Количество записей')
+plt.show()
+print(len(df))
+
+df['STARTMARKETINGDATE'] = pd.to_datetime(df['STARTMARKETINGDATE'], format='%Y%m%d')
+df['STARTMARKETINGDATE'] = df['STARTMARKETINGDATE'].dt.strftime('%d.%m.%Y')
+df['LISTING_RECORD_CERTIFIED_THROUGH'] = pd.to_datetime(df['LISTING_RECORD_CERTIFIED_THROUGH'], format='%Y%m%d')
+df['LISTING_RECORD_CERTIFIED_THROUGH'] = df['LISTING_RECORD_CERTIFIED_THROUGH'].dt.strftime('%d.%m.%Y')
+
+df.drop_duplicates(subset=['ACTIVE_NUMERATOR_STRENGTH','ACTIVE_INGRED_UNIT','SUBSTANCENAME','PRODUCTTYPENAME',
+                              'PRODUCTTYPENAME','NONPROPRIETARYNAME','DOSAGEFORMNAME'],inplace=True)
+print("DF AFTER DELETE DUPLICATES:")
+
+
+plt.figure()
+plt.title('Количество записей после удаления дубликатов записей в столбцах')
+df.count().plot(kind='bar', linestyle='solid', color='blue')
+plt.xlabel('Столбцы')
+plt.ylabel('Количество записей')
+plt.show()
+print("Количество записей после удаления дубликатов записей в столбцах")
+print(len(df))
+
+df.dropna(subset=['LISTING_RECORD_CERTIFIED_THROUGH'], inplace=True)
+print("DataFrame после удаления пустых строк:")
+
+plt.figure()
+plt.title('Количество записей после удаления удаления пустых строк')
+df.count().plot(kind='bar')
+plt.xlabel('Столбцы')
+plt.ylabel('Количество записей')
+plt.show()
+print('Количество записей после удаления удаления пустых строк')
+print(len(df))
+
+df = df[df['ACTIVE_NUMERATOR_STRENGTH'] <= 1000]
+print("DataFrame после удаления аномально больших значений:")
+
+plt.figure()
+plt.title('Количество записей после удаления аномальных значений')
+df.count().plot(kind='bar', linestyle='solid', color='blue')
+plt.xlabel('Столбцы')
+plt.ylabel('Количество записей')
+plt.show()
+print("Количество записей после удаления аномальных значений")
+print(len(df))
+
+df.drop_duplicates(subset='PRODUCTNDC',inplace=True)
+print("AFTER DELETE DUPLICATES PRODUCTNDC")
+
+plt.figure()
+plt.title('Количество записей после удаления дубликатов в столбце PRODUCTNDC')
+df.count().plot(kind='bar', linestyle='solid', color='blue')
+plt.xlabel('Столбцы')
+plt.ylabel('Количество записей')
+plt.show()
+print("Количество записей после удаления дубликатов в столбце PRODUCTNDC')
+print(len(df))
+
+unit_counts = df['ACTIVE_INGRED_UNIT'].value_counts()
+#
+# Получение списка уникальных единиц измерения, которые используются меньше 5 раз
+units_to_remove = unit_counts[unit_counts < 5].index.tolist()
+#
+# Удаление строк, содержащих указанные единицы измерения
+df_end = df[~df['ACTIVE_INGRED_UNIT'].isin(units_to_remove)]
+
+plt.figure()
+plt.title('Сравнение исходных данных и данных после манипуляций')
+labels = ['Исходные данные', 'Данные после манипуляций']
+counts = [len(df_origin), len(df_end)]
+plt.bar(labels, counts)
+plt.xlabel('Тип данных')
+plt.ylabel('Количество записей')
+plt.show()
+print("Количество записей после обработки и очистки данных ")
+print(len(df_end))
+
+zz=pd.merge(df, dd, on=['PRODUCTNDC'], how='inner')
+
+plt.figure()
+plt.title('Сравнение исходных данных и данных пригодных к использовнию')
+labels = ['Исходные данные', 'Данные пригодные к использовнию']
+counts = [len(df_origin), len(zz)]
+plt.bar(labels, counts)
+plt.xlabel('Тип данных')
+plt.ylabel('Количество записей')
+plt.show()
+print("Количество записей пригодных к использованию:")
+print(len(zz))
+
+
+
+
