@@ -57,6 +57,10 @@ plt.show()
 print('Количество записей после удаления удаления пустых строк')
 print(len(df))
 
+df['ACTIVE_NUMERATOR_STRENGTH'] = pd.to_numeric(df['ACTIVE_NUMERATOR_STRENGTH'], errors='coerce').fillna(0)
+
+df['ACTIVE_NUMERATOR_STRENGTH'] = df['ACTIVE_NUMERATOR_STRENGTH'].astype(int)
+
 df = df[df['ACTIVE_NUMERATOR_STRENGTH'] <= 1000]
 print("DataFrame после удаления аномально больших значений:")
 
