@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <title>Анализ посещаемости здания</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f7f7f7;
+    }
+    h1 {
+      color: #333;
+    }
+    label, select, input {
+      font-size: 1rem;
+      margin-right: 10px;
+      margin-bottom: 15px;
+    }
+    button {
+      font-size: 1rem;
+      padding: 6px 12px;
+      cursor: pointer;
+    }
+    img {
+      max-width: 100%;
+      border: 1px solid #ddd;
+      margin-top: 15px;
+      background: white;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+      background: white;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 6px 10px;
+      text-align: center;
+    }
+    th {
+      background: #eee;
+    }
+    .container {
+      max-width: 1000px;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      box-shadow: 0 0 10px #ccc;
+      border-radius: 8px;
+    }
+    .section {
+      margin-top: 30px;
+    }
+    pre {
+      background: #eee;
+      padding: 10px;
+      overflow-x: auto;
+      max-height: 200px;
+    }
+    .anomaly-cards {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .anomaly-card {
+      border: 1px solid #ccc;
+      border-left: 5px solid #888;
+      padding: 10px;
+      background: #fafafa;
+      width: 100%;
+      max-width: 300px;
+      border-radius: 6px;
+    }
+
+    .anomaly-card.anomalous {
+      border-left-color: red;
+      background: #ffe6e6;
+    }
+
+    .anomaly-card.normal {
+      border-left-color: green;
+      background: #e6ffe6;
+    }
+
+    .anomaly-card h4 {
+      margin: 0 0 5px;
+      font-size: 1.1em;
+    }
+
+    .anomaly-card p {
+      margin: 0;
+      font-size: 0.9em;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Анализ посещаемости здания</h1>
+
+    <form id="walkForm">
+      <label for="startRoom">Начальная зона:</label>
+      <select id="startRoom" required>
+        <option value="Entrance">Entrance</option>
+        <option value="Hallway">Hallway</option>
+        <option value="Shop1">Shop1</option>
+        <option value="Shop2">Shop2</option>
+        <option value="Shop3">Shop3</option>
+        <option value="Shop4">Shop4</option>
+        <option value="Shop5">Shop5</option>
+        <option value="Shop6">Shop6</option>
+        <option value="FoodCourt">FoodCourt</option>
+        <option value="Toilets">Toilets</option>
+        <option value="Elevator">Elevator</option>
+        <option value="Stairs">Stairs</option>
+        <option value="Parking">Parking</option>
+        <option value="Office1">Office1</option>
+        <option value="Office2">Office2</option>
+        <option value="Exit">Exit</option>
+      </select>
+
+      <label for="endRoom">Конечная зона (необязательно):</label>
+      <select id="endRoom">
+        <option value="">— не задано —</option>
+        <option value="Entrance">Entrance</option>
+        <option value="Hallway">Hallway</option>
+        <option value="Shop1">Shop1</option>
+        <option value="Shop2">Shop2</option>
+        <option value="Shop3">Shop3</option>
+        <option value="Shop4">Shop4</option>
+        <option value="Shop5">Shop5</option>
+        <option value="Shop6">Shop6</option>
+        <option value="FoodCourt">FoodCourt</option>
+        <option value="Toilets">Toilets</option>
+        <option value="Elevator">Elevator</option>
+        <option value="Stairs">Stairs</option>
+        <option value="Parking">Parking</option>
+        <option value="Office1">Office1</option>
+        <option value="Office2">Office2</option>
+        <option value="Exit">Exit</option>
+      </select>
+
+      <label for="steps">Шагов (по умолчанию 10):</label>
+      <input type="number" id="steps" min="1" max="100" value="10" />
+
+      <button type="submit">Смоделировать путь</button>
+    </form>
+
+    <div id="loading" style="display:none; margin-top: 20px;">Загрузка данных...</div>
+
+    <div class="section" id="visualizationSection" style="display:none;">
+      <div id="plotlyGraph" style="width:100%; height:600px;"></div>
+      <h2>Визуализация плана с тепловой картой</h2>
+      <img id="floorplanImage" src="" alt="Floorplan Visualization" />
+    </div>
+
+    <div class="section" id="metricsSection" style="display:none;">
+      <h2>Метрики посещаемости зон</h2>
+      <table id="metricsTable">
+        <thead>
+          <tr>
+            <th>Зона</th>
+            <th>Количество посещений</th>
+            <th>Среднее время пребывания (сек.)</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="section" id="edgesSection" style="display:none;">
+      <h2>Переходы между зонами (рёбра)</h2>
+      <table id="edgesTable">
+        <thead>
+          <tr>
+            <th>Переход</th>
+            <th>Количество переходов</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="section" id="clusteringSection" style="display:none;">
+      <h2>Кластеризация паттернов</h2>
+      <h3>KMeans (по шагам пути):</h3>
+      <pre id="kmeansOutput"></pre>
+      <h3>DBSCAN (по шагам пути):</h3>
+      <pre id="dbscanOutput"></pre>
+    </div>
+
+    <div class="section" id="anomaliesSection" style="display:none;">
+      <h2>Обнаруженные аномалии</h2>
+      <div class="anomaly-box">
+        <h3>One-Class SVM</h3>
+        <div id="ocsvmCards" class="anomaly-cards"></div>
+      </div>
+      <div class="anomaly-box">
+        <h3>Isolation Forest</h3>
+        <div id="iforestCards" class="anomaly-cards"></div>
+      </div>
+      <div class="anomaly-box">
+        <h3>Rule-based</h3>
+        <div id="ruleCards" class="anomaly-cards"></div>
+    </div>
+</div>
+  </div>
+
+  <script>
+    const form = document.getElementById('walkForm');
+    const loading = document.getElementById('loading');
+    const visualizationSection = document.getElementById('visualizationSection');
+    <div id="plotlyGraph" style="width:100%; height:600px;"></div>
+    const metricsSection = document.getElementById('metricsSection');
+    const edgesSection = document.getElementById('edgesSection');
+    const clusteringSection = document.getElementById('clusteringSection');
+    const anomaliesSection = document.getElementById('anomaliesSection');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      loading.style.display = 'block';
+      visualizationSection.style.display = 'none';
+      metricsSection.style.display = 'none';
+      edgesSection.style.display = 'none';
+      clusteringSection.style.display = 'none';
+      anomaliesSection.style.display = 'none';
+
+      const startRoom = document.getElementById('startRoom').value;
+      const endRoom = document.getElementById('endRoom').value || null;
+      const steps = parseInt(document.getElementById('steps').value, 10) || 10;
+
+      try {
+        const response = await fetch('/random-walk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ start_room: startRoom, end_room: endRoom, steps: steps })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          alert('Ошибка: ' + (errorData.error || 'Неизвестная ошибка'));
+          loading.style.display = 'none';
+          return;
+        }
+
+        const data = await response.json();
+
+        // Показать визуализацию
+        const img = document.getElementById('floorplanImage');
+        img.src = data.visualization_url + '?t=' + Date.now();
+        visualizationSection.style.display = 'block';
+
+        // Таблица метрик
+        const metricsTbody = document.querySelector('#metricsTable tbody');
+        metricsTbody.innerHTML = '';
+        data.metrics.forEach(item => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${item.zone}</td>
+            <td>${item.visit_count}</td>
+            <td>${item.avg_time_sec}</td>
+          `;
+          metricsTbody.appendChild(tr);
+        });
+        metricsSection.style.display = 'block';
+
+        // Таблица переходов (рёбра)
+        const edgesTbody = document.querySelector('#edgesTable tbody');
+        edgesTbody.innerHTML = '';
+        for (const [edge, count] of Object.entries(data.edge_visit_counts)) {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${edge.replace('-', ' → ')}</td>
+            <td>${count}</td>
+          `;
+          edgesTbody.appendChild(tr);
+        }
+        edgesSection.style.display = 'block';
+
+        // Кластеризация
+        document.getElementById('kmeansOutput').textContent = JSON.stringify(data.clustering.kmeans, null, 2);
+        document.getElementById('dbscanOutput').textContent = JSON.stringify(data.clustering.dbscan, null, 2);
+        clusteringSection.style.display = 'block';
+
+        // Аномалии
+        function renderAnomalies(containerId, results) {
+          const container = document.getElementById(containerId);
+          container.innerHTML = '';
+
+          results.forEach((item, idx) => {
+            const div = document.createElement('div');
+            div.className = 'anomaly-card ' + (item.is_anomaly ? 'anomalous' : 'normal');
+            div.innerHTML = `
+              <h4>${item.path_name || 'Путь #' + (idx + 1)}</h4>
+              <p>${item.is_anomaly ? '⚠️ Обнаружена аномалия' : '✅ Норма'}</p>
+              <p><strong>Путь:</strong> ${item.path ? item.path.join(' → ') : 'N/A'}</p>
+            `;
+            container.appendChild(div);
+          });
+        }
+
+        // Выводим визуально:
+        renderAnomalies('ocsvmCards', data.anomalies.one_class_svm);
+        renderAnomalies('iforestCards', data.anomalies.isolation_forest);
+        renderAnomalies('ruleCards', data.anomalies.rule_based);
+        anomaliesSection.style.display = 'block';
+
+      } catch (err) {
+        alert('Ошибка при запросе: ' + err.message);
+      }
+
+      loading.style.display = 'none';
+    });
+  </script>
+<script>
+  document.getElementById('walkForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    document.getElementById('loading').style.display = 'block';
+
+    const startRoom = document.getElementById('startRoom').value;
+    const endRoom = document.getElementById('endRoom').value;
+    const steps = document.getElementById('steps').value;
+
+    const res = await fetch('/random-walk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        start_room: startRoom,
+        end_room: endRoom || null,
+        steps: parseInt(steps)
+      })
+    });
+
+    const data = await res.json();
+    document.getElementById('loading').style.display = 'none';
+
+    if (data.error) {
+      alert(data.error);
+      return;
+    }
+
+    // Отображаем изображение
+    document.getElementById('visualizationSection').style.display = 'block';
+    document.getElementById('floorplanImage').src = data.visualization_url;
+
+    // Интерфейс: рисуем интерактивный граф
+    drawInteractiveGraph(data.path, data.node_visit_counts);
+
+    // Таблицы
+    document.getElementById('metricsSection').style.display = 'block';
+    const tbody = document.querySelector('#metricsTable tbody');
+    tbody.innerHTML = '';
+    data.metrics.forEach(m => {
+      tbody.innerHTML += `<tr><td>${m.zone}</td><td>${m.visit_count}</td><td>${m.avg_time_sec}</td></tr>`;
+    });
+
+    document.getElementById('edgesSection').style.display = 'block';
+    const etbody = document.querySelector('#edgesTable tbody');
+    etbody.innerHTML = '';
+    for (let edge in data.edge_visit_counts) {
+      etbody.innerHTML += `<tr><td>${edge}</td><td>${data.edge_visit_counts[edge]}</td></tr>`;
+    }
+
+    document.getElementById('clusteringSection').style.display = 'block';
+    document.getElementById('kmeansOutput').textContent = JSON.stringify(data.clustering.kmeans);
+    document.getElementById('dbscanOutput').textContent = JSON.stringify(data.clustering.dbscan);
+
+    document.getElementById('anomaliesSection').style.display = 'block';
+    renderAnomalies('ocsvmCards', data.anomalies.one_class_svm, data.path);
+    renderAnomalies('iforestCards', data.anomalies.isolation_forest, data.path);
+    renderAnomalies('ruleCards', data.anomalies.rule_based, data.path);
+  });
+
+  const nodePositions = {
+    'Entrance': [1, 3],
+    'Hallway': [3, 3],
+    'Shop1': [3, 5],
+    'Shop2': [5, 5],
+    'Shop3': [7, 5],
+    'Shop4': [9, 5],
+    'Shop5': [11, 5],
+    'Shop6': [13, 5],
+    'FoodCourt': [3, 1],
+    'Toilets': [5, 1],
+    'Elevator': [3, 7],
+    'Stairs': [5, 7],
+    'Parking': [7, 7],
+    'Office1': [9, 7],
+    'Office2': [11, 7],
+    'Exit': [15, 5]
+  };
+
+  function drawInteractiveGraph(path, nodeVisitCounts) {
+    const nodeNames = Object.keys(nodePositions);
+
+    const x = [];
+    const y = [];
+    const text = [];
+
+    nodeNames.forEach(name => {
+      x.push(nodePositions[name][0]);
+      y.push(nodePositions[name][1]);
+      const visits = nodeVisitCounts[name] || 0;
+      text.push(`${name}<br>Посещений: ${visits}`);
+    });
+
+    const nodes = {
+      x,
+      y,
+      text,
+      mode: 'markers+text',
+      type: 'scatter',
+      name: 'Зоны',
+      marker: {
+        size: x.map((_, i) => 10 + (nodeVisitCounts[nodeNames[i]] || 0) * 3),
+        color: x.map((_, i) => (nodeVisitCounts[nodeNames[i]] || 0)),
+        colorscale: 'Reds',
+        showscale: true,
+        colorbar: { title: 'Посещений' }
+      },
+      textposition: 'top center'
+    };
+
+    const pathCoords = path.map(name => nodePositions[name]);
+    const pathX = pathCoords.map(coord => coord[0]);
+    const pathY = pathCoords.map(coord => coord[1]);
+
+    const pathLine = {
+      x: pathX,
+      y: pathY,
+      mode: 'lines+markers',
+      type: 'scatter',
+      name: 'Путь',
+      line: { color: 'blue', width: 3 },
+      marker: { size: 8, color: 'blue' }
+    };
+
+    const layout = {
+      title: 'Интерактивный маршрут по зданию',
+      xaxis: { visible: false },
+      yaxis: { visible: false, scaleanchor: "x", scaleratio: 1 },
+      margin: { l: 20, r: 20, t: 40, b: 20 },
+      plot_bgcolor: '#f9f9f9'
+    };
+
+    Plotly.newPlot('plotlyGraph', [nodes, pathLine], layout, {responsive: true});
+  }
+
+  function renderAnomalies(containerId, preds, path) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+    preds.forEach((p, i) => {
+      const zone = path[i];
+      const card = document.createElement('div');
+      card.classList.add('anomaly-card');
+      card.classList.add(p === -1 ? 'anomalous' : 'normal');
+      card.innerHTML = `<h4>${zone}</h4><p>${p === -1 ? 'Аномалия' : 'Норма'}</p>`;
+      container.appendChild(card);
+    });
+  }
+</script>
+</body>
+</html>
